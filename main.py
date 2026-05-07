@@ -5,6 +5,9 @@ from openai import OpenAI
 import os
 import time
 import psycopg2
+import json
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 from psycopg2.extras import RealDictCursor
 
 load_dotenv()
@@ -12,6 +15,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 APP_API_TOKEN = os.getenv("APP_API_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL")
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is missing")
@@ -59,6 +63,12 @@ class NoteRequest(BaseModel):
 
 class UserRequest(BaseModel):
     user_id: str = Field(..., min_length=8, max_length=120)
+
+class BillingVerifyRequest(BaseModel):
+    user_id: str = Field(..., min_length=8, max_length=120)
+    package_name: str = Field(..., min_length=3, max_length=150)
+    product_id: str = Field(..., min_length=3, max_length=150)
+    purchase_token: str = Field(..., min_length=10)
 
 
 def verify_app_token(request: Request):
@@ -194,6 +204,82 @@ def consume_record(req: UserRequest, request: Request):
                 "free_records_left": new_left
             }
 
+def get_android_publisher_service():
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+        raise HTTPException(status_code=500, detail="Google service account missing")
+
+    info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+
+    credentials = service_account.Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/androidpublisher"]
+    )
+
+    return build("androidpublisher", "v3", credentials=credentials)
+
+
+@app.post("/billing/verify")
+def verify_billing(req: BillingVerifyRequest, request: Request):
+    verify_app_token(request)
+
+    user_id = req.user_id.strip()
+    purchase_token = req.purchase_token.strip()
+
+    try:
+        service = get_android_publisher_service()
+
+        result = service.purchases().subscriptionsv2().get(
+            packageName=req.package_name,
+            token=purchase_token
+        ).execute()
+
+        subscription_state = result.get("subscriptionState", "")
+
+        is_active = subscription_state in [
+            "SUBSCRIPTION_STATE_ACTIVE",
+            "SUBSCRIPTION_STATE_IN_GRACE_PERIOD"
+        ]
+
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    insert into users (user_id)
+                    values (%s)
+                    on conflict (user_id) do nothing
+                    """,
+                    (user_id,)
+                )
+
+                cur.execute(
+                    """
+                    update users
+                    set is_pro = %s,
+                        purchase_token = %s,
+                        subscription_state = %s,
+                        updated_at = now()
+                    where user_id = %s
+                    """,
+                    (
+                        is_active,
+                        purchase_token,
+                        subscription_state if subscription_state else "unknown",
+                        user_id
+                    )
+                )
+
+                conn.commit()
+
+        return {
+            "is_pro": is_active,
+            "subscription_state": subscription_state,
+            "free_records_left": 10
+        }
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Billing verification failed")
 
 @app.post("/summarize")
 def summarize_note(req: NoteRequest, request: Request):
