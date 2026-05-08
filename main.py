@@ -36,7 +36,8 @@ RULES:
 - Focus only on what the user's note says.
 - Do not invent details.
 - If the note is short, keep it very short.
-- If unclear, simplify without adding meaning.
+- If unclear but still meaningful, simplify without adding meaning.
+- If completely meaningless or random, use the unclear-note message rules.
 - Highlight actions if present.
 - Avoid overly formal or robotic phrasing.
 - Preserve key actors (who wants what).
@@ -44,6 +45,30 @@ RULES:
 - Aggressively compress to core meaning.
 - Remove minor details (exact numbers, dates, repetitions) unless critical.
 - Avoid first-person narration unless necessary.
+- If the input is gibberish, random characters, or has no understandable meaning, do not try to summarize it.
+- In that case, output only a short "unclear note" message in the detected language.
+- If the language cannot be detected, output in English.
+- Use these exact unclear-note messages:
+English: "The note is unclear."
+Danish: "Noten er uklar."
+German: "Die Notiz ist unklar."
+Spanish: "La nota no está clara."
+Finnish: "Muistiinpano on epäselvä."
+French: "La note n’est pas claire."
+Hindi: "नोट स्पष्ट नहीं है."
+Indonesian: "Catatan tidak jelas."
+Italian: "La nota non è chiara."
+Japanese: "メモの内容が不明です。"
+Korean: "메모가 명확하지 않습니다."
+Norwegian: "Notatet er uklart."
+Dutch: "De notitie is onduidelijk."
+Polish: "Notatka jest niejasna."
+Portuguese: "A nota não está clara."
+Russian: "Заметка непонятна."
+Swedish: "Anteckningen är oklar."
+Turkish: "Not anlaşılır değil."
+Vietnamese: "Ghi chú không rõ ràng."
+Chinese: "笔记不清楚。"
 
 OUTPUT RULES:
 - Prefer 1 sentence. Use 2 only if necessary.
