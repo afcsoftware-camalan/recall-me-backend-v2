@@ -298,7 +298,7 @@ def verify_billing(req: BillingVerifyRequest, request: Request):
         return {
             "is_pro": is_active,
             "subscription_state": subscription_state,
-            "free_records_left": 10
+            "free_records_left": 5
         }
 
     except HTTPException:
